@@ -67,16 +67,14 @@ public class AnalogClockApplicationContext : ApplicationContext
         animateTimer.Start();
     }
 
-    private bool IsStartupEnabled()
+    private static bool IsStartupEnabled()
     {
         string keyName = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        using (RegistryKey rKey = Registry.CurrentUser.OpenSubKey(keyName)!)
-        {
-            return (rKey.GetValue(Application.ProductName) != null) ? true : false;
-        }
+        using RegistryKey rKey = Registry.CurrentUser.OpenSubKey(keyName)!;
+        return rKey.GetValue(Application.ProductName) != null;
     }
 
-    private Icon GenerateAnalogClockIcon(DateTime time)
+    private static Icon GenerateAnalogClockIcon(DateTime time)
     {
         var bitmap = new Bitmap(48, 48);
         var g = Graphics.FromImage(bitmap);
