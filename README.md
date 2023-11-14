@@ -1,5 +1,7 @@
 # AnalogClock
 
+![image](https://github.com/Namacha411/AnalogClock/assets/52745962/19bcaa62-c5be-4f91-b27a-b6e78498a186)
+
 Analog clock on your windows taskbar
 
 ## Installation
