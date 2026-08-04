@@ -109,7 +109,7 @@ public class AnalogClockApplicationContext : ApplicationContext
             }
             else
             {
-                rKey.DeleteValue(Application.ProductName, false);
+                rKey.DeleteValue(Application.ProductName!, false);
             }
             rKey.Close();
         }
