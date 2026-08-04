@@ -1,20 +1,19 @@
 namespace AnalogClock;
 
 using Microsoft.Win32;
-using System;
-using System.Drawing;
-using System.Diagnostics;
-using System.Windows.Forms;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
+using System.Windows.Forms; // System.Threading.Timer との曖昧性を解消するため明示的に指定
 
 static class Program
 {
     [STAThread]
     static void Main()
     {
-        var procMutex = new System.Threading.Mutex(true, "_ANALOG_CLOCK_MUTEX", out var result);
-        if (!result)
+        using var procMutex = new Mutex(true, "_ANALOG_CLOCK_MUTEX", out var acquired);
+        if (!acquired)
         {
             return;
         }
@@ -28,35 +27,35 @@ static class Program
     }
 }
 
-public class AnalogClockApplicationContext : ApplicationContext
+public sealed class AnalogClockApplicationContext : ApplicationContext
 {
-    private const int ANIMATE_TIMER_DEFAULT_INTERVAL = 60000; // ms (秒は描画に使わないため分単位で十分)
+    private const int AnimateTimerIntervalMilliseconds = 60000; // 秒は描画に使わないため分単位で十分
+    private const string StartupRegistryKeyName = @"Software\Microsoft\Windows\CurrentVersion\Run";
+
     private readonly ToolStripMenuItem startupMenu;
     private readonly NotifyIcon notifyIcon;
-    private readonly Timer animateTimer = new();
-
+    private readonly Timer animateTimer = new() { Interval = AnimateTimerIntervalMilliseconds };
 
     public AnalogClockApplicationContext()
     {
-        startupMenu = new ToolStripMenuItem("Startup", null, SetStartup!);
-        if (IsStartupEnabled())
+        startupMenu = new ToolStripMenuItem("Startup", null, SetStartup)
         {
-            startupMenu.Checked = true;
-        }
+            Checked = IsStartupEnabled()
+        };
 
-        ContextMenuStrip contextMenuStrip = new ContextMenuStrip(new Container());
-        contextMenuStrip.Items.AddRange(new ToolStripItem[]
-        {
+        var contextMenuStrip = new ContextMenuStrip(new Container());
+        contextMenuStrip.Items.AddRange(
+        [
             startupMenu,
             new ToolStripSeparator(),
             new ToolStripMenuItem($"{Application.ProductName} v{Application.ProductVersion}")
             {
                 Enabled = false
             },
-            new ToolStripMenuItem("Exit", null, Exit!)
-        });
+            new ToolStripMenuItem("Exit", null, Exit)
+        ]);
 
-        notifyIcon = new NotifyIcon()
+        notifyIcon = new NotifyIcon
         {
             Icon = GenerateAnalogClockIcon(DateTime.Now),
             ContextMenuStrip = contextMenuStrip,
@@ -64,14 +63,13 @@ public class AnalogClockApplicationContext : ApplicationContext
             Visible = true
         };
 
-        SetAnimation();
+        animateTimer.Tick += AnimationTick;
         animateTimer.Start();
     }
 
     private static bool IsStartupEnabled()
     {
-        string keyName = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        using RegistryKey rKey = Registry.CurrentUser.OpenSubKey(keyName)!;
+        using RegistryKey rKey = Registry.CurrentUser.OpenSubKey(StartupRegistryKeyName)!;
         return rKey.GetValue(Application.ProductName) != null;
     }
 
@@ -90,7 +88,7 @@ public class AnalogClockApplicationContext : ApplicationContext
 
         using var bitmap = new Bitmap(width, height);
         using var g = Graphics.FromImage(bitmap);
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
 
         // 文字盤(塗りつぶし円): 細い輪郭線よりも極小サイズで潰れにくい
         using var faceBrush = new SolidBrush(Color.FromArgb(255, 0, 120, 215));
@@ -117,32 +115,28 @@ public class AnalogClockApplicationContext : ApplicationContext
         return Icon.FromHandle(bitmap.GetHicon());
     }
 
-    private void SetStartup(object sender, EventArgs e)
+    private void SetStartup(object? sender, EventArgs e)
     {
         startupMenu.Checked = !startupMenu.Checked;
-        string keyName = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        using (RegistryKey rKey = Registry.CurrentUser.OpenSubKey(keyName, true)!)
+        using RegistryKey rKey = Registry.CurrentUser.OpenSubKey(StartupRegistryKeyName, true)!;
+        if (startupMenu.Checked)
         {
-            if (startupMenu.Checked)
-            {
-                rKey.SetValue(Application.ProductName, Process.GetCurrentProcess().MainModule!.FileName);
-            }
-            else
-            {
-                rKey.DeleteValue(Application.ProductName!, false);
-            }
-            rKey.Close();
+            rKey.SetValue(Application.ProductName, Process.GetCurrentProcess().MainModule!.FileName);
+        }
+        else
+        {
+            rKey.DeleteValue(Application.ProductName!, false);
         }
     }
 
-    private void Exit(object sender, EventArgs e)
+    private void Exit(object? sender, EventArgs e)
     {
         animateTimer.Stop();
         notifyIcon.Visible = false;
         Application.Exit();
     }
 
-    private void AnimationTick(object sender, EventArgs e)
+    private void AnimationTick(object? sender, EventArgs e)
     {
         var oldIcon = notifyIcon.Icon;
         notifyIcon.Icon = GenerateAnalogClockIcon(DateTime.Now);
@@ -153,11 +147,5 @@ public class AnalogClockApplicationContext : ApplicationContext
             DestroyIcon(oldIcon.Handle);
             oldIcon.Dispose();
         }
-    }
-
-    private void SetAnimation()
-    {
-        animateTimer.Interval = ANIMATE_TIMER_DEFAULT_INTERVAL;
-        animateTimer.Tick += new EventHandler(AnimationTick!);
     }
 }
