@@ -30,7 +30,7 @@ static class Program
 
 public class AnalogClockApplicationContext : ApplicationContext
 {
-    private const int ANIMATE_TIMER_DEFAULT_INTERVAL = 1000; // ms
+    private const int ANIMATE_TIMER_DEFAULT_INTERVAL = 60000; // ms (秒は描画に使わないため分単位で十分)
     private readonly ToolStripMenuItem startupMenu;
     private readonly NotifyIcon notifyIcon;
     private readonly Timer animateTimer = new();
@@ -80,20 +80,40 @@ public class AnalogClockApplicationContext : ApplicationContext
 
     private static Icon GenerateAnalogClockIcon(DateTime time)
     {
-        using var bitmap = new Bitmap(48, 48);
+        // OS 側で縮小されるとにじむため、実際に表示される通知領域アイコンのサイズで直接描画する
+        Size iconSize = SystemInformation.SmallIconSize;
+        int width = iconSize.Width;
+        int height = iconSize.Height;
+        float centerX = width / 2f;
+        float centerY = height / 2f;
+        float radius = Math.Min(width, height) / 2f;
+
+        using var bitmap = new Bitmap(width, height);
         using var g = Graphics.FromImage(bitmap);
-        using var outlinePen = new Pen(Color.White, 1);
-        using var hourPen = new Pen(Color.White, 5);
-        using var minutePen = new Pen(Color.White, 3);
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        // 外枠
-        g.DrawEllipse(outlinePen, 0, 0, 48, 48);
+
+        // 文字盤(塗りつぶし円): 細い輪郭線よりも極小サイズで潰れにくい
+        using var faceBrush = new SolidBrush(Color.FromArgb(255, 0, 120, 215));
+        g.FillEllipse(faceBrush, centerX - radius, centerY - radius, radius * 2, radius * 2);
+
+        float hourLength = radius * 0.65f;
+        float minuteLength = radius * 0.95f;
+        float hourWidth = Math.Max(2f, radius * 0.28f);
+        float minuteWidth = Math.Max(2f, radius * 0.22f);
+        float dotRadius = Math.Max(1f, radius * 0.15f);
+
+        using var hourPen = new Pen(Color.White, hourWidth);
+        using var minutePen = new Pen(Color.Orange, minuteWidth);
         // 長針
-        g.DrawLine(hourPen, 24, 24, 24 + (int)(Math.Sin(time.Hour * Math.PI / 6) * 15), 24 - (int)(Math.Cos(time.Hour * Math.PI / 6) * 15));
+        g.DrawLine(hourPen, centerX, centerY,
+            centerX + (float)(Math.Sin(time.Hour * Math.PI / 6) * hourLength),
+            centerY - (float)(Math.Cos(time.Hour * Math.PI / 6) * hourLength));
         // 短針
-        g.DrawLine(minutePen, 24, 24, 24 + (int)(Math.Sin(time.Minute * Math.PI / 30) * 24), 24 - (int)(Math.Cos(time.Minute * Math.PI / 30) * 24));
+        g.DrawLine(minutePen, centerX, centerY,
+            centerX + (float)(Math.Sin(time.Minute * Math.PI / 30) * minuteLength),
+            centerY - (float)(Math.Cos(time.Minute * Math.PI / 30) * minuteLength));
         // 中心点
-        g.FillEllipse(Brushes.White, 24 - 5, 24 - 5, 10, 10);
+        g.FillEllipse(Brushes.Silver, centerX - dotRadius, centerY - dotRadius, dotRadius * 2, dotRadius * 2);
         return Icon.FromHandle(bitmap.GetHicon());
     }
 
