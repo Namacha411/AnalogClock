@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Diagnostics;
 using System.Windows.Forms;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 
 static class Program
 {
@@ -74,15 +75,19 @@ public class AnalogClockApplicationContext : ApplicationContext
         return rKey.GetValue(Application.ProductName) != null;
     }
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyIcon(IntPtr handle);
+
     private static Icon GenerateAnalogClockIcon(DateTime time)
     {
-        var bitmap = new Bitmap(48, 48);
-        var g = Graphics.FromImage(bitmap);
-        var hourPen = new Pen(Color.White, 5);
-        var minutePen = new Pen(Color.White, 3);
+        using var bitmap = new Bitmap(48, 48);
+        using var g = Graphics.FromImage(bitmap);
+        using var outlinePen = new Pen(Color.White, 1);
+        using var hourPen = new Pen(Color.White, 5);
+        using var minutePen = new Pen(Color.White, 3);
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         // 外枠
-        g.DrawEllipse(new Pen(Color.White, 1), 0, 0, 48, 48);
+        g.DrawEllipse(outlinePen, 0, 0, 48, 48);
         // 長針
         g.DrawLine(hourPen, 24, 24, 24 + (int)(Math.Sin(time.Hour * Math.PI / 6) * 15), 24 - (int)(Math.Cos(time.Hour * Math.PI / 6) * 15));
         // 短針
@@ -119,8 +124,15 @@ public class AnalogClockApplicationContext : ApplicationContext
 
     private void AnimationTick(object sender, EventArgs e)
     {
+        var oldIcon = notifyIcon.Icon;
         notifyIcon.Icon = GenerateAnalogClockIcon(DateTime.Now);
         notifyIcon.Text = DateTime.Now.ToString("HH:mm");
+
+        if (oldIcon != null)
+        {
+            DestroyIcon(oldIcon.Handle);
+            oldIcon.Dispose();
+        }
     }
 
     private void SetAnimation()
